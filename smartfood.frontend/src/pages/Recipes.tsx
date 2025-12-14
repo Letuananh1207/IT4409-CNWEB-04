@@ -751,7 +751,7 @@ const Recipes = () => {
         difficulty:
           selectedDifficulty === "all" ? undefined : selectedDifficulty,
       }),
-    staleTime: 1000 * 60, // Cache recipes cho 1 phút
+    staleTime: 1000 * 60 * 10, // Cache recipes cho 1 phút
     placeholderData: (previousData) => previousData, // Giữ dữ liệu cũ khi đang fetch (search/filter)
   });
 
@@ -764,7 +764,7 @@ const Recipes = () => {
     queryKey: ["suggestedRecipes"],
     queryFn: getSuggestedRecipes,
     enabled: userRole !== "admin" && userRole !== null, // Chỉ kích hoạt khi vai trò được xác định và không phải admin
-    staleTime: 1000 * 60 * 5, // Cache suggestions cho 5 phút
+    staleTime: 1000 * 60 * 10, // Cache suggestions cho 5 phút
   });
 
   // --- Fetch User Role ---

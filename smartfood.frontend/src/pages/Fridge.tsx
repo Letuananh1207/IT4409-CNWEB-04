@@ -1,4 +1,4 @@
-import { useState } from "react"; // Giữ useState cho form/filter
+import { useState } from "react";
 // ⭐️ IMPORT REACT QUERY HOOKS
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -33,6 +33,9 @@ import {
   Search,
   Trash2,
   Loader2,
+  Pencil, // ⭐️ THÊM: Icon chỉnh sửa
+  Save, // ⭐️ THÊM: Icon lưu
+  X, // ⭐️ THÊM: Icon hủy
 } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -43,7 +46,7 @@ import {
   getFoodItems,
   createFoodItem,
   deleteFoodItem,
-  // updateFoodItem, // Không dùng updateFoodItem trong scope này
+  updateFoodItem, // Giữ nguyên updateFoodItem
   FoodItemData,
 } from "@/services/foodItemService";
 
@@ -57,14 +60,15 @@ interface FridgeItem extends FoodItemData {
 
 // ⭐️ Định nghĩa Query Key
 const FRIDGE_ITEMS_QUERY_KEY = "fridgeItems";
-
+// ⭐️ Định nghĩa thời gian cache (ví dụ: 5 phút stale time, 1 giờ cache time)
+const FIVE_MINUTES = 1000 * 60 * 5; // 300000 ms
+const ONE_HOUR = 1000 * 60 * 60; // 3600000 ms
 const Fridge = () => {
-  // ⭐️ Khởi tạo Query Client để thao tác với cache
   const queryClient = useQueryClient();
 
-  // ❌ Loại bỏ: const [items, setItems] = useState<FridgeItem[]>([]);
-  // ❌ Loại bỏ: const [isLoading, setIsLoading] = useState(true);
-  // ❌ Loại bỏ: const [error, setError] = useState<string | null>(null);
+  // ⭐️ THÊM MỚI: State để quản lý item đang được chỉnh sửa và số lượng tạm thời
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [tempQuantity, setTempQuantity] = useState<number>(0);
 
   // Giữ nguyên State cho Form và Filter
   const [searchTerm, setSearchTerm] = useState("");
@@ -81,57 +85,34 @@ const Fridge = () => {
   // Data/Config cố định (Giữ nguyên)
   const categories = [
     "Rau củ",
-
     "Thịt cá",
-
     "Sữa & trứng",
-
     "Đồ khô",
-
     "Gia vị",
-
     "Đồ uống",
-
     "Đồ đông lạnh",
-
     "Khác",
   ];
 
-  // Điều chỉnh lại `locations` để khớp với `storageLocation` bạn đã định nghĩa trong backend
-
   const locations = [
     "Tủ lạnh",
-
     "Tủ đông",
-
     "Kệ bếp",
-
     "Ngăn rau củ",
-
     "Cửa tủ lạnh",
-
     "Khác",
   ];
 
   const units = [
     "g",
-
     "kg",
-
     "ml",
-
     "lít",
-
     "cái",
-
     "bó",
-
     "hộp",
-
     "chai",
-
     "thanh",
-
     "túi",
   ]; // Thêm các đơn vị phổ biến
 
@@ -153,20 +134,20 @@ const Fridge = () => {
         updatedAt: new Date(item.updatedAt!),
       })) as FridgeItem[];
     },
+    staleTime: FIVE_MINUTES, // Dữ liệu được coi là tươi trong 5 phút
+    gcTime: ONE_HOUR, // Giữ cache trong 1 giờ
   });
 
   // Sử dụng items hoặc mảng rỗng nếu chưa có data/error
   const fridgeItems: FridgeItem[] = items || [];
   const totalItems = fridgeItems.length;
 
-  // --- ⭐️ 2. Thao tác Thêm (CREATE) bằng useMutation ---
+  // --- ⭐️ 2. Thao tác Thêm (CREATE) bằng useMutation (Giữ nguyên) ---
   const addItemMutation = useMutation({
     mutationFn: createFoodItem,
     onSuccess: () => {
-      // Thành công: Yêu cầu React Query fetch lại data (Invalidation)
       queryClient.invalidateQueries({ queryKey: [FRIDGE_ITEMS_QUERY_KEY] });
 
-      // Reset form
       setNewItem({
         name: "",
         quantity: "",
@@ -191,7 +172,7 @@ const Fridge = () => {
   });
 
   const addItem = () => {
-    // Kiểm tra các trường bắt buộc (Giữ nguyên logic kiểm tra)
+    // Logic kiểm tra cũ
     if (
       !newItem.name ||
       !newItem.quantity ||
@@ -234,12 +215,13 @@ const Fridge = () => {
     addItemMutation.mutate(foodItemToSend); // Kích hoạt mutation
   };
 
-  // --- ⭐️ 3. Thao tác Xóa (DELETE) bằng useMutation ---
+  // --- ⭐️ 3. Thao tác Xóa (DELETE) bằng useMutation (Giữ nguyên) ---
   const deleteItemMutation = useMutation({
     mutationFn: deleteFoodItem,
     onSuccess: () => {
-      // Thành công: Yêu cầu React Query fetch lại data
       queryClient.invalidateQueries({ queryKey: [FRIDGE_ITEMS_QUERY_KEY] });
+      // Đảm bảo thoát chế độ chỉnh sửa nếu item bị xóa
+      setEditingItemId(null);
       toast({
         title: "Đã xóa thực phẩm",
         description: "Thực phẩm đã được xóa khỏi tủ lạnh.",
@@ -259,8 +241,106 @@ const Fridge = () => {
     deleteItemMutation.mutate(id); // Kích hoạt mutation
   };
 
-  // ❌ Loại bỏ: Logic fetchItems và useEffect tải dữ liệu ban đầu
-  // ❌ Loại bỏ: useEffect(() => { fetchItems(); }, []);
+  // ----------------------------------------------------
+  // ⭐️ CẬP NHẬT: Thao tác Cập nhật Số lượng (UPDATE)
+  // ----------------------------------------------------
+
+  const updateQuantityMutation = useMutation({
+    mutationFn: ({ id, quantity }: { id: string; quantity: number }) =>
+      updateFoodItem(id, { quantity }),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: [FRIDGE_ITEMS_QUERY_KEY] });
+      setEditingItemId(null); // Thoát chế độ chỉnh sửa sau khi lưu thành công
+
+      if (variables.quantity > 0) {
+        toast({
+          title: "Cập nhật thành công",
+          description: `Đã cập nhật số lượng của ${
+            data.name || "thực phẩm"
+          } thành ${data.quantity} ${data.unit}.`,
+        });
+      }
+    },
+    onError: (err: any) => {
+      console.error("Lỗi khi cập nhật số lượng:", err);
+      toast({
+        title: "Lỗi",
+        description:
+          err.response?.data?.message || "Không thể cập nhật số lượng.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // ⭐️ THÊM MỚI: Hàm mở chế độ chỉnh sửa
+  const startEditing = (item: FridgeItem) => {
+    setEditingItemId(item._id);
+    setTempQuantity(item.quantity);
+  };
+
+  // ⭐️ THÊM MỚI: Hàm hủy chỉnh sửa
+  const cancelEditing = () => {
+    setEditingItemId(null);
+    setTempQuantity(0);
+  };
+
+  // ⭐️ THÊM MỚI: Hàm lưu thay đổi số lượng (kích hoạt mutation)
+  const saveQuantityChange = (itemId: string, currentItem: FridgeItem) => {
+    // 1. Kiểm tra tính hợp lệ
+    const newQuantity = tempQuantity;
+
+    if (newQuantity < 0 || isNaN(newQuantity)) {
+      toast({
+        title: "Lỗi đầu vào",
+        description: "Số lượng phải là một số dương.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // 2. Kiểm tra nếu không có thay đổi
+    if (newQuantity === currentItem.quantity) {
+      toast({
+        title: "Không có thay đổi",
+        description: "Số lượng mới giống số lượng cũ.",
+      });
+      setEditingItemId(null);
+      return;
+    }
+
+    // 3. Nếu số lượng bằng 0, gọi xóa
+    if (newQuantity === 0) {
+      deleteItem(itemId);
+      return;
+    }
+
+    // 4. Kích hoạt mutation
+    updateQuantityMutation.mutate({ id: itemId, quantity: newQuantity });
+  };
+
+  // ⭐️ CẬP NHẬT: Hàm điều chỉnh số lượng (+/-) - Cập nhật state cục bộ
+  const adjustQuantity = (currentQuantity: number, change: number) => {
+    const newQuantity = parseFloat((currentQuantity + change).toFixed(2));
+    if (newQuantity >= 0) {
+      setTempQuantity(newQuantity);
+    }
+  };
+
+  // ⭐️ CẬP NHẬT: Hàm xử lý điền trực tiếp số lượng - Cập nhật state cục bộ
+  const handleManualQuantityChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = event.target.value;
+    const newQuantity = parseFloat(value);
+
+    // Cho phép nhập số không hợp lệ trong quá trình gõ (ví dụ: '1.' hoặc '')
+    if (value === "") {
+      setTempQuantity(0);
+    } else if (!isNaN(newQuantity) && newQuantity >= 0) {
+      setTempQuantity(newQuantity);
+    }
+    // Nếu nhập ký tự không phải số, bỏ qua
+  };
 
   // --- Logic tính toán ngày hết hạn và trạng thái (Giữ nguyên) ---
   const getDaysUntilExpiry = (expiryDate: Date) => {
@@ -295,8 +375,7 @@ const Fridge = () => {
     return { status: "good", label: `Còn ${days} ngày`, color: "secondary" };
   };
 
-  // --- Lọc và tìm kiếm ---
-  // Sử dụng fridgeItems thay cho items
+  // --- Lọc và tìm kiếm (Giữ nguyên) ---
   const filteredItems = fridgeItems.filter((item) => {
     const matchesSearch = item.name
       .toLowerCase()
@@ -313,8 +392,7 @@ const Fridge = () => {
       getDaysUntilExpiry(item.expiryDate) >= 0
   );
 
-  // --- Hiển thị Trạng thái Loading/Error ---
-  // ⭐️ Sử dụng isLoading và error từ useQuery
+  // --- Hiển thị Trạng thái Loading/Error (Giữ nguyên) ---
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -326,7 +404,6 @@ const Fridge = () => {
     );
   }
 
-  // ⭐️ Sử dụng error từ useQuery
   if (error) {
     return (
       <div className="text-center py-12 text-red-500">
@@ -348,6 +425,7 @@ const Fridge = () => {
     );
   }
 
+  // --- JSX (Phần hiển thị chính) ---
   return (
     <div className="space-y-8">
       <div className="space-y-2">
@@ -360,7 +438,7 @@ const Fridge = () => {
         </p>
       </div>
 
-      {/* Quick Stats */}
+      {/* Quick Stats (Giữ nguyên) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardContent className="p-6">
@@ -406,7 +484,7 @@ const Fridge = () => {
         </Card>
       </div>
 
-      {/* Add New Item */}
+      {/* Add New Item (Giữ nguyên) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -546,7 +624,7 @@ const Fridge = () => {
         </CardContent>
       </Card>
 
-      {/* Search and Filter */}
+      {/* Search and Filter (Giữ nguyên) */}
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row gap-4">
@@ -581,7 +659,7 @@ const Fridge = () => {
         </CardContent>
       </Card>
 
-      {/* Fridge Items */}
+      {/* Fridge Items - PHẦN HIỂN THỊ CẬP NHẬT */}
       <Card>
         <CardHeader>
           <CardTitle>Thực phẩm trong tủ lạnh</CardTitle>
@@ -602,29 +680,35 @@ const Fridge = () => {
             ) : (
               filteredItems.map((item) => {
                 const expiryStatus = getExpiryStatus(item.expiryDate);
+                const isEditing = editingItemId === item._id;
+                const isUpdating =
+                  updateQuantityMutation.isPending &&
+                  updateQuantityMutation.variables?.id === item._id;
+                const isDeleting =
+                  deleteItemMutation.isPending &&
+                  deleteItemMutation.variables === item._id;
+
                 return (
                   <div
                     key={item._id} // Sử dụng _id từ MongoDB
                     className="p-4 border rounded-lg bg-white hover:shadow-md transition-all duration-200"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-2">
-                          <h4 className="font-semibold text-lg">{item.name}</h4>
+                          <h4 className="font-semibold text-lg truncate">
+                            {item.name}
+                          </h4>
                           <Badge variant={expiryStatus.color as any}>
                             {expiryStatus.status === "expired"
                               ? "Hết hạn"
                               : expiryStatus.label}
                           </Badge>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2 text-sm text-gray-600">
                           <div>
                             <span className="font-medium">Danh mục:</span>{" "}
                             {item.category || "Chưa phân loại"}
-                          </div>
-                          <div>
-                            <span className="font-medium">Số lượng:</span>{" "}
-                            {item.quantity} {item.unit}
                           </div>
                           <div>
                             <span className="font-medium">Vị trí:</span>{" "}
@@ -636,19 +720,113 @@ const Fridge = () => {
                               locale: vi,
                             })}
                           </div>
+
+                          {/* ⭐️ CẬP NHẬT: Hiển thị/Chế độ chỉnh sửa Số lượng */}
+                          <div className="col-span-2 lg:col-span-1 flex items-center gap-2">
+                            <span className="font-medium">SL:</span>
+                            {isEditing ? (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7 p-0"
+                                  onClick={() =>
+                                    adjustQuantity(tempQuantity, -1)
+                                  }
+                                  disabled={isUpdating || tempQuantity <= 0}
+                                >
+                                  -
+                                </Button>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  value={tempQuantity.toString()}
+                                  onChange={handleManualQuantityChange}
+                                  className="w-16 h-8 text-center"
+                                  disabled={isUpdating}
+                                />
+                                <span className="text-sm font-medium text-gray-800 flex-shrink-0">
+                                  {item.unit}
+                                </span>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7 p-0"
+                                  onClick={() =>
+                                    adjustQuantity(tempQuantity, 1)
+                                  }
+                                  disabled={isUpdating}
+                                >
+                                  +
+                                </Button>
+                              </>
+                            ) : (
+                              <span className="font-bold text-gray-800">
+                                {item.quantity} {item.unit}
+                              </span>
+                            )}
+                          </div>
+                          {/* END ⭐️ CẬP NHẬT: Hiển thị/Chế độ chỉnh sửa Số lượng */}
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        // ⭐️ Sử dụng deleteItem với id
-                        onClick={() => deleteItem(item._id!)}
-                        className="text-red-500 hover:text-red-700"
-                        // ⭐️ Disabled khi đang gửi API
-                        disabled={deleteItemMutation.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+
+                      {/* ⭐️ CẬP NHẬT: Nút Chỉnh sửa/Lưu/Hủy */}
+                      <div className="flex gap-2 flex-shrink-0">
+                        {isEditing ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => saveQuantityChange(item._id, item)}
+                              disabled={isUpdating || isDeleting}
+                              className="bg-green-500 hover:bg-green-600 text-white"
+                            >
+                              {isUpdating ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Save className="h-4 w-4 mr-1" />
+                              )}
+                              Lưu
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={cancelEditing}
+                              disabled={isUpdating || isDeleting}
+                              className="text-gray-500 hover:text-red-500"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => startEditing(item)}
+                            disabled={isUpdating || isDeleting}
+                            className="text-blue-500 hover:text-blue-700"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+
+                        {/* Nút xóa (Giữ nguyên) */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteItem(item._id!)}
+                          className="text-red-500 hover:text-red-700"
+                          disabled={isDeleting || isUpdating || isEditing}
+                        >
+                          {isDeleting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                      {/* END ⭐️ CẬP NHẬT: Nút Chỉnh sửa/Lưu/Hủy */}
                     </div>
                   </div>
                 );

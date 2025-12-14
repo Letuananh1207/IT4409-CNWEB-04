@@ -169,7 +169,7 @@ const Index = () => {
     queryKey: [DASHBOARD_STATS_QUERY_KEY],
     queryFn: fetchAllDashboardData,
     enabled: userLoggedIn,
-    staleTime: 1000 * 60,
+    staleTime: 1000 * 60 * 10,
   });
 
   const emptyStats: DashboardData = {

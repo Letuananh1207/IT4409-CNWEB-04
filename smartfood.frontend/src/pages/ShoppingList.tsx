@@ -108,6 +108,7 @@ const ShoppingList = () => {
   } = useQuery<ShoppingListType | null, Error>({
     queryKey: [SHOPPING_LIST_QUERY_KEY],
     queryFn: fetchPrimaryShoppingList,
+    staleTime: 1000 * 60 * 10,
   });
 
   // Lấy dữ liệu an toàn
