@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 // ⭐️ Import React Query hooks
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,19 +7,34 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"; // ⭐️ Sửa lỗi: Import Card components riêng lẻ
-import { Button } from "@/components/ui/button"; // ⭐️ Sửa lỗi: Import Button
-import { Input } from "@/components/ui/input"; // ⭐️ Sửa lỗi: Import Input
-import { Label } from "@/components/ui/label"; // ⭐️ Sửa lỗi: Import Label
-import { Checkbox } from "@/components/ui/checkbox"; // ⭐️ Sửa lỗi: Import Checkbox
-import { Badge } from "@/components/ui/badge"; // ⭐️ Sửa lỗi: Import Badge
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"; // ⭐️ Sửa lỗi: Import Select components
+} from "@/components/ui/select";
+// Import Popover & Command cho chức năng tìm kiếm
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+
 import {
   Plus,
   Trash2,
@@ -27,13 +42,20 @@ import {
   ShoppingCart,
   Loader2,
   AlertTriangle,
+  Check, // Icon Check
+  ChevronsUpDown, // Icon ChevronsUpDown
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils"; // Giả định bạn có utility class cn
+import { units } from "../utils/units";
 
 // Import API service
 import shoppingListService from "@/services/shoppingListService";
 
-// ⭐️ Giữ nguyên kiểu dữ liệu
+// ⭐️ CẬP NHẬT: Import Food Suggestions và Type
+import { FoodInfo, FOOD_SUGGESTIONS } from "../utils/foodSuggestions"; // Sửa đường dẫn cho đúng
+
+// Giữ nguyên kiểu dữ liệu
 interface ShoppingItem {
   _id?: string;
   name: string;
@@ -54,7 +76,7 @@ interface ShoppingListType {
   updatedAt: string;
 }
 
-// ⭐️ Định nghĩa Query Key
+// Định nghĩa Query Key
 const SHOPPING_LIST_QUERY_KEY = "primaryShoppingList";
 
 // Hàm QueryFn: Lấy danh sách chính
@@ -69,7 +91,7 @@ const fetchPrimaryShoppingList = async (): Promise<ShoppingListType | null> => {
 const ShoppingList = () => {
   const queryClient = useQueryClient();
 
-  // State cho item mới (Giữ nguyên)
+  // State cho item mới
   const [newItem, setNewItem] = useState({
     name: "",
     quantity: "",
@@ -77,6 +99,33 @@ const ShoppingList = () => {
     category: "",
   });
 
+  // ⭐️ CẬP NHẬT: State cho Combobox/Autocomplete
+  const [isComboboxOpen, setIsComboboxOpen] = useState(false);
+  const [foodSearchTerm, setFoodSearchTerm] = useState("");
+
+  // ⭐️ CẬP NHẬT: Logic Lọc Gợi ý
+  const filteredSuggestions = useMemo(() => {
+    if (!foodSearchTerm) return FOOD_SUGGESTIONS;
+    return FOOD_SUGGESTIONS.filter((food) =>
+      food.name.toLowerCase().includes(foodSearchTerm.toLowerCase())
+    );
+  }, [foodSearchTerm]);
+
+  // ⭐️ CẬP NHẬT: Xử lý khi chọn một mục gợi ý
+  const handleSelectFood = (food: FoodInfo) => {
+    // 1. Điền Tên, Đơn vị, Danh mục
+    setNewItem((prev) => ({
+      ...prev,
+      name: food.name,
+      unit: food.unit,
+      category: food.category,
+    }));
+    // 2. Đóng combobox và reset bộ lọc tìm kiếm
+    setIsComboboxOpen(false);
+    setFoodSearchTerm("");
+  };
+
+  // Các danh mục và đơn vị cố định
   const categories = [
     "Rau củ",
     "Thịt cá",
@@ -85,19 +134,6 @@ const ShoppingList = () => {
     "Gia vị",
     "Đồ uống",
     "Khác",
-  ];
-  const units = [
-    "cái",
-    "kg",
-    "g",
-    "lít",
-    "ml",
-    "bó",
-    "túi",
-    "hộp",
-    "chai",
-    "thanh",
-    "khác",
   ];
 
   // --- 1. QUERY (Lấy dữ liệu) ---
@@ -124,7 +160,7 @@ const ShoppingList = () => {
         items: data.items,
       }),
 
-    onSuccess: (data, variables, context) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [SHOPPING_LIST_QUERY_KEY] });
       toast({
         title: "Cập nhật thành công!",
@@ -146,7 +182,7 @@ const ShoppingList = () => {
   const createNewDefaultList = async (newItem: ShoppingItem) => {
     try {
       // Giả định service có hàm createShoppingList
-      const newDefaultList = await shoppingListService.createShoppingList({
+      await shoppingListService.createShoppingList({
         name: "Danh sách mua sắm của tôi",
         type: "daily",
         items: [newItem],
@@ -320,7 +356,7 @@ const ShoppingList = () => {
         </CardContent>
       </Card>
 
-      {/* Add New Item */}
+      {/* Add New Item - PHẦN CẬP NHẬT */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -328,22 +364,66 @@ const ShoppingList = () => {
             Thêm sản phẩm mới
           </CardTitle>
           <CardDescription>
-            Thêm sản phẩm mới vào danh sách mua sắm của bạn
+            Tìm kiếm thực phẩm để tự động điền Đơn vị và Danh mục.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Tên sản phẩm</Label>
-              <Input
-                id="name"
-                placeholder="Ví dụ: Cà chua"
-                value={newItem.name}
-                onChange={(e) =>
-                  setNewItem({ ...newItem, name: e.target.value })
-                }
-              />
+            {/* Tên sản phẩm bằng Combobox */}
+            <div className="space-y-2 col-span-1 md:col-span-2">
+              <Label htmlFor="name">Tên sản phẩm (Tìm kiếm & Chọn)</Label>
+              <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={isComboboxOpen}
+                    className="w-full justify-between"
+                    disabled={isMutating}
+                  >
+                    {newItem.name ? newItem.name : "Tìm kiếm thực phẩm..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-50">
+                  <Command>
+                    <CommandInput
+                      placeholder="Tìm kiếm thực phẩm..."
+                      value={foodSearchTerm}
+                      onValueChange={setFoodSearchTerm}
+                    />
+                    <CommandEmpty>Không tìm thấy thực phẩm.</CommandEmpty>
+                    <CommandList>
+                      <CommandGroup>
+                        {filteredSuggestions.map((food) => (
+                          <CommandItem
+                            key={food.name}
+                            value={food.name}
+                            onSelect={() => handleSelectFood(food)}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                newItem.name === food.name
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
+                            />
+                            {food.name}
+                            <span className="ml-auto text-xs text-gray-500">
+                              ({food.unit} - {food.category})
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
+            {/* END Tên sản phẩm */}
+
+            {/* Số lượng (Giữ nguyên) */}
             <div className="space-y-2">
               <Label htmlFor="quantity">Số lượng</Label>
               <Input
@@ -354,8 +434,11 @@ const ShoppingList = () => {
                 onChange={(e) =>
                   setNewItem({ ...newItem, quantity: e.target.value })
                 }
+                disabled={isMutating}
               />
             </div>
+
+            {/* Đơn vị (Điền tự động, có thể chỉnh sửa) */}
             <div className="space-y-2">
               <Label htmlFor="unit">Đơn vị</Label>
               <Select
@@ -363,6 +446,7 @@ const ShoppingList = () => {
                 onValueChange={(value) =>
                   setNewItem({ ...newItem, unit: value })
                 }
+                disabled={isMutating}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn đơn vị" />
@@ -376,6 +460,8 @@ const ShoppingList = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Danh mục (Điền tự động, có thể chỉnh sửa) */}
             <div className="space-y-2">
               <Label htmlFor="category">Danh mục</Label>
               <Select
@@ -383,6 +469,7 @@ const ShoppingList = () => {
                 onValueChange={(value) =>
                   setNewItem({ ...newItem, category: value })
                 }
+                disabled={isMutating}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn danh mục" />
@@ -460,6 +547,7 @@ const ShoppingList = () => {
                           <Badge variant="secondary" className="text-xs">
                             {item.category || "Chưa phân loại"}
                           </Badge>
+                          {/* Đơn vị hiển thị bình thường từ dữ liệu item */}
                           <span className="text-sm text-gray-600">
                             {item.quantity} {item.unit}
                           </span>

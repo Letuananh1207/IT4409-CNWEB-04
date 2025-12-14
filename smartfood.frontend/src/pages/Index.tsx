@@ -360,26 +360,24 @@ const Index = () => {
                 className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
               >
                 {stat.href ? (
-                  <Link to={stat.href}>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-gray-600">
-                            {stat.title}
-                          </p>
-                          <p className="text-3xl font-bold text-gray-900">
-                            {stat.value}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {stat.description}
-                          </p>
-                        </div>
-                        <div className={`p-3 rounded-full ${stat.bgColor}`}>
-                          <stat.icon className={`h-6 w-6 ${stat.color}`} />
-                        </div>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-600">
+                          {stat.title}
+                        </p>
+                        <p className="text-3xl font-bold text-gray-900">
+                          {stat.value}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {stat.description}
+                        </p>
                       </div>
-                    </CardContent>
-                  </Link>
+                      <div className={`p-3 rounded-full ${stat.bgColor}`}>
+                        <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                      </div>
+                    </div>
+                  </CardContent>
                 ) : (
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">

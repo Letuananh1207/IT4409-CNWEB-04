@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 // ⭐️ IMPORT REACT QUERY HOOKS
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -25,6 +25,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+// IMPORT THÊM: Command (cho combobox/autocomplete)
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Plus,
   Refrigerator,
@@ -33,24 +42,31 @@ import {
   Search,
   Trash2,
   Loader2,
-  Pencil, // ⭐️ THÊM: Icon chỉnh sửa
-  Save, // ⭐️ THÊM: Icon lưu
-  X, // ⭐️ THÊM: Icon hủy
+  Pencil,
+  Save,
+  X,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils"; // Giả định bạn có utility class cn
+import { units } from "../utils/units";
 
 // Import API service và interface
 import {
   getFoodItems,
   createFoodItem,
   deleteFoodItem,
-  updateFoodItem, // Giữ nguyên updateFoodItem
+  updateFoodItem,
   FoodItemData,
 } from "@/services/foodItemService";
 
-// Định nghĩa kiểu dữ liệu cho Food Item trong frontend
+// ⭐️ CẬP NHẬT: Import FoodInfo và FOOD_SUGGESTIONS từ file riêng
+import { FoodInfo, FOOD_SUGGESTIONS } from "@/utils/foodSuggestions";
+
+// Định nghĩa kiểu dữ liệu cho Food Item trong frontend (Giữ nguyên)
 interface FridgeItem extends FoodItemData {
   _id: string;
   expiryDate: Date; // Đã parse thành Date object
@@ -58,29 +74,57 @@ interface FridgeItem extends FoodItemData {
   updatedAt: Date; // Đã parse thành Date object
 }
 
-// ⭐️ Định nghĩa Query Key
+// Định nghĩa Query Key
 const FRIDGE_ITEMS_QUERY_KEY = "fridgeItems";
-// ⭐️ Định nghĩa thời gian cache (ví dụ: 5 phút stale time, 1 giờ cache time)
+// Định nghĩa thời gian cache (ví dụ: 5 phút stale time, 1 giờ cache time)
 const FIVE_MINUTES = 1000 * 60 * 5; // 300000 ms
 const ONE_HOUR = 1000 * 60 * 60; // 3600000 ms
+
 const Fridge = () => {
   const queryClient = useQueryClient();
 
-  // ⭐️ THÊM MỚI: State để quản lý item đang được chỉnh sửa và số lượng tạm thời
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [tempQuantity, setTempQuantity] = useState<number>(0);
 
-  // Giữ nguyên State cho Form và Filter
+  // Giữ nguyên State cho Filter
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+
+  // State cho form
   const [newItem, setNewItem] = useState({
     name: "",
     quantity: "", // Vẫn là string
-    unit: "",
-    category: "",
+    unit: "", // Sẽ được điền tự động
+    category: "", // Sẽ được điền tự động
     storageLocation: "",
     expiryDate: undefined as Date | undefined,
   });
+
+  // State cho Combobox/Autocomplete
+  const [isComboboxOpen, setIsComboboxOpen] = useState(false);
+  const [foodSearchTerm, setFoodSearchTerm] = useState("");
+
+  // Logic Lọc Gợi ý
+  const filteredSuggestions = useMemo(() => {
+    if (!foodSearchTerm) return FOOD_SUGGESTIONS;
+    return FOOD_SUGGESTIONS.filter((food) =>
+      food.name.toLowerCase().includes(foodSearchTerm.toLowerCase())
+    );
+  }, [foodSearchTerm]);
+
+  // Xử lý khi chọn một mục gợi ý (Không có toast)
+  const handleSelectFood = (food: FoodInfo) => {
+    // 1. Điền Tên, Đơn vị, Danh mục
+    setNewItem((prev) => ({
+      ...prev,
+      name: food.name,
+      unit: food.unit,
+      category: food.category,
+    }));
+    // 2. Đóng combobox và reset bộ lọc tìm kiếm
+    setIsComboboxOpen(false);
+    setFoodSearchTerm("");
+  };
 
   // Data/Config cố định (Giữ nguyên)
   const categories = [
@@ -94,38 +138,17 @@ const Fridge = () => {
     "Khác",
   ];
 
-  const locations = [
-    "Tủ lạnh",
-    "Tủ đông",
-    "Kệ bếp",
-    "Ngăn rau củ",
-    "Cửa tủ lạnh",
-    "Khác",
-  ];
+  const locations = ["Tủ đông", "Ngăn rau củ", "Cửa tủ lạnh"];
 
-  const units = [
-    "g",
-    "kg",
-    "ml",
-    "lít",
-    "cái",
-    "bó",
-    "hộp",
-    "chai",
-    "thanh",
-    "túi",
-  ]; // Thêm các đơn vị phổ biến
-
-  // --- ⭐️ 1. Lấy dữ liệu (READ) bằng useQuery ---
+  // --- 1. Lấy dữ liệu (READ) bằng useQuery (Giữ nguyên) ---
   const {
-    data: items, // Đổi tên data thành items
-    isLoading, // Trạng thái tải từ useQuery
-    error, // Lỗi từ useQuery
+    data: items,
+    isLoading,
+    error,
   } = useQuery({
     queryKey: [FRIDGE_ITEMS_QUERY_KEY],
     queryFn: async () => {
       const data = await getFoodItems();
-      // Chuyển đổi string thành Date object (Parsing)
       return data.map((item) => ({
         ...item,
         _id: item._id!,
@@ -134,20 +157,20 @@ const Fridge = () => {
         updatedAt: new Date(item.updatedAt!),
       })) as FridgeItem[];
     },
-    staleTime: FIVE_MINUTES, // Dữ liệu được coi là tươi trong 5 phút
-    gcTime: ONE_HOUR, // Giữ cache trong 1 giờ
+    staleTime: FIVE_MINUTES,
+    gcTime: ONE_HOUR,
   });
 
-  // Sử dụng items hoặc mảng rỗng nếu chưa có data/error
   const fridgeItems: FridgeItem[] = items || [];
   const totalItems = fridgeItems.length;
 
-  // --- ⭐️ 2. Thao tác Thêm (CREATE) bằng useMutation (Giữ nguyên) ---
+  // --- 2. Thao tác Thêm (CREATE) bằng useMutation (Giữ nguyên) ---
   const addItemMutation = useMutation({
     mutationFn: createFoodItem,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [FRIDGE_ITEMS_QUERY_KEY] });
 
+      // Reset form, bao gồm cả các trường tự điền
       setNewItem({
         name: "",
         quantity: "",
@@ -172,7 +195,7 @@ const Fridge = () => {
   });
 
   const addItem = () => {
-    // Logic kiểm tra cũ
+    // Logic kiểm tra cũ (Đã cập nhật kiểm tra trường)
     if (
       !newItem.name ||
       !newItem.quantity ||
@@ -207,7 +230,7 @@ const Fridge = () => {
       name: newItem.name,
       quantity: quantityNum,
       unit: newItem.unit,
-      category: newItem.category || undefined,
+      category: newItem.category || "Khác", // Gán mặc định nếu không có category
       storageLocation: newItem.storageLocation,
       expiryDate: newItem.expiryDate.toISOString(), // Chuyển Date object thành ISO string
     };
@@ -215,12 +238,11 @@ const Fridge = () => {
     addItemMutation.mutate(foodItemToSend); // Kích hoạt mutation
   };
 
-  // --- ⭐️ 3. Thao tác Xóa (DELETE) bằng useMutation (Giữ nguyên) ---
+  // --- 3. Thao tác Xóa (DELETE) bằng useMutation (Giữ nguyên) ---
   const deleteItemMutation = useMutation({
     mutationFn: deleteFoodItem,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [FRIDGE_ITEMS_QUERY_KEY] });
-      // Đảm bảo thoát chế độ chỉnh sửa nếu item bị xóa
       setEditingItemId(null);
       toast({
         title: "Đã xóa thực phẩm",
@@ -238,11 +260,11 @@ const Fridge = () => {
   });
 
   const deleteItem = (id: string) => {
-    deleteItemMutation.mutate(id); // Kích hoạt mutation
+    deleteItemMutation.mutate(id);
   };
 
   // ----------------------------------------------------
-  // ⭐️ CẬP NHẬT: Thao tác Cập nhật Số lượng (UPDATE)
+  // CẬP NHẬT: Thao tác Cập nhật Số lượng (UPDATE) (Giữ nguyên)
   // ----------------------------------------------------
 
   const updateQuantityMutation = useMutation({
@@ -250,8 +272,7 @@ const Fridge = () => {
       updateFoodItem(id, { quantity }),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: [FRIDGE_ITEMS_QUERY_KEY] });
-      setEditingItemId(null); // Thoát chế độ chỉnh sửa sau khi lưu thành công
-
+      setEditingItemId(null);
       if (variables.quantity > 0) {
         toast({
           title: "Cập nhật thành công",
@@ -272,21 +293,17 @@ const Fridge = () => {
     },
   });
 
-  // ⭐️ THÊM MỚI: Hàm mở chế độ chỉnh sửa
   const startEditing = (item: FridgeItem) => {
     setEditingItemId(item._id);
     setTempQuantity(item.quantity);
   };
 
-  // ⭐️ THÊM MỚI: Hàm hủy chỉnh sửa
   const cancelEditing = () => {
     setEditingItemId(null);
     setTempQuantity(0);
   };
 
-  // ⭐️ THÊM MỚI: Hàm lưu thay đổi số lượng (kích hoạt mutation)
   const saveQuantityChange = (itemId: string, currentItem: FridgeItem) => {
-    // 1. Kiểm tra tính hợp lệ
     const newQuantity = tempQuantity;
 
     if (newQuantity < 0 || isNaN(newQuantity)) {
@@ -298,7 +315,6 @@ const Fridge = () => {
       return;
     }
 
-    // 2. Kiểm tra nếu không có thay đổi
     if (newQuantity === currentItem.quantity) {
       toast({
         title: "Không có thay đổi",
@@ -308,17 +324,14 @@ const Fridge = () => {
       return;
     }
 
-    // 3. Nếu số lượng bằng 0, gọi xóa
     if (newQuantity === 0) {
       deleteItem(itemId);
       return;
     }
 
-    // 4. Kích hoạt mutation
     updateQuantityMutation.mutate({ id: itemId, quantity: newQuantity });
   };
 
-  // ⭐️ CẬP NHẬT: Hàm điều chỉnh số lượng (+/-) - Cập nhật state cục bộ
   const adjustQuantity = (currentQuantity: number, change: number) => {
     const newQuantity = parseFloat((currentQuantity + change).toFixed(2));
     if (newQuantity >= 0) {
@@ -326,20 +339,17 @@ const Fridge = () => {
     }
   };
 
-  // ⭐️ CẬP NHẬT: Hàm xử lý điền trực tiếp số lượng - Cập nhật state cục bộ
   const handleManualQuantityChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const value = event.target.value;
     const newQuantity = parseFloat(value);
 
-    // Cho phép nhập số không hợp lệ trong quá trình gõ (ví dụ: '1.' hoặc '')
     if (value === "") {
       setTempQuantity(0);
     } else if (!isNaN(newQuantity) && newQuantity >= 0) {
       setTempQuantity(newQuantity);
     }
-    // Nếu nhập ký tự không phải số, bỏ qua
   };
 
   // --- Logic tính toán ngày hết hạn và trạng thái (Giữ nguyên) ---
@@ -385,7 +395,6 @@ const Fridge = () => {
     return matchesSearch && matchesCategory;
   });
 
-  // Items sắp hết hạn (sử dụng fridgeItems)
   const expiringItems = fridgeItems.filter(
     (item) =>
       getDaysUntilExpiry(item.expiryDate) <= 3 &&
@@ -428,6 +437,7 @@ const Fridge = () => {
   // --- JSX (Phần hiển thị chính) ---
   return (
     <div className="space-y-8">
+      {/* ... (Header, Quick Stats - Giữ nguyên) ... */}
       <div className="space-y-2">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
           <Refrigerator className="h-8 w-8 text-primary" />
@@ -471,7 +481,6 @@ const Fridge = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Danh mục</p>
-                {/* Sử dụng Set để đếm số danh mục duy nhất */}
                 <p className="text-3xl font-bold text-green-600">
                   {new Set(fridgeItems.map((item) => item.category)).size}
                 </p>
@@ -484,7 +493,7 @@ const Fridge = () => {
         </Card>
       </div>
 
-      {/* Add New Item (Giữ nguyên) */}
+      {/* Add New Item - PHẦN THÊM MỚI */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -492,34 +501,82 @@ const Fridge = () => {
             Thêm thực phẩm mới
           </CardTitle>
           <CardDescription>
-            Thêm thực phẩm mới vào tủ lạnh của bạn
+            Tìm kiếm thực phẩm để tự động điền Đơn vị và Danh mục.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Tên thực phẩm</Label>
-              <Input
-                id="name"
-                placeholder="Ví dụ: Cà chua"
-                value={newItem.name}
-                onChange={(e) =>
-                  setNewItem({ ...newItem, name: e.target.value })
-                }
-              />
+            {/* Tên thực phẩm bằng Combobox */}
+            <div className="space-y-2 col-span-1 md:col-span-2">
+              <Label htmlFor="name">Tên thực phẩm (Tìm kiếm & Chọn)</Label>
+              <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={isComboboxOpen}
+                    className="w-full justify-between"
+                    disabled={addItemMutation.isPending}
+                  >
+                    {newItem.name ? newItem.name : "Tìm kiếm thực phẩm..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                  <Command>
+                    {/* Input tìm kiếm trong Popover */}
+                    <CommandInput
+                      placeholder="Tìm kiếm thực phẩm..."
+                      value={foodSearchTerm}
+                      onValueChange={setFoodSearchTerm}
+                    />
+                    <CommandEmpty>Không tìm thấy thực phẩm.</CommandEmpty>
+                    <CommandList>
+                      <CommandGroup>
+                        {filteredSuggestions.map((food) => (
+                          <CommandItem
+                            key={food.name}
+                            value={food.name}
+                            onSelect={() => handleSelectFood(food)}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                newItem.name === food.name
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
+                            />
+                            {food.name}
+                            <span className="ml-auto text-xs text-gray-500">
+                              ({food.unit} - {food.category})
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
+            {/* END Tên thực phẩm bằng Combobox */}
+
+            {/* Số lượng */}
             <div className="space-y-2">
               <Label htmlFor="quantity">Số lượng</Label>
               <Input
                 id="quantity"
-                type="number" // Đảm bảo input là số
+                type="number"
                 placeholder="Ví dụ: 500"
                 value={newItem.quantity}
                 onChange={(e) =>
                   setNewItem({ ...newItem, quantity: e.target.value })
                 }
+                disabled={addItemMutation.isPending}
               />
             </div>
+
+            {/* Đơn vị (Có thể chỉnh sửa sau khi tự điền) */}
             <div className="space-y-2">
               <Label htmlFor="unit">Đơn vị</Label>
               <Select
@@ -527,6 +584,7 @@ const Fridge = () => {
                 onValueChange={(value) =>
                   setNewItem({ ...newItem, unit: value })
                 }
+                disabled={!newItem.name || addItemMutation.isPending}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn đơn vị" />
@@ -540,6 +598,19 @@ const Fridge = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Danh mục (Readonly) */}
+            <div className="space-y-2">
+              <Label htmlFor="category">Danh mục (Tự động điền)</Label>
+              <Input
+                id="category"
+                value={newItem.category || "Chưa chọn"}
+                disabled
+                className="font-medium bg-gray-50 text-gray-700"
+              />
+            </div>
+
+            {/* Vị trí lưu trữ (Giữ nguyên) */}
             <div className="space-y-2">
               <Label htmlFor="storageLocation">Vị trí lưu trữ</Label>
               <Select
@@ -547,6 +618,7 @@ const Fridge = () => {
                 onValueChange={(value) =>
                   setNewItem({ ...newItem, storageLocation: value })
                 }
+                disabled={addItemMutation.isPending}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn vị trí" />
@@ -560,26 +632,8 @@ const Fridge = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="category">Danh mục (Tùy chọn)</Label>
-              <Select
-                value={newItem.category}
-                onValueChange={(value) =>
-                  setNewItem({ ...newItem, category: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn danh mục" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+
+            {/* Ngày hết hạn (Giữ nguyên) */}
             <div className="space-y-2">
               <Label>Ngày hết hạn</Label>
               <Popover>
@@ -587,6 +641,7 @@ const Fridge = () => {
                   <Button
                     variant="outline"
                     className="w-full justify-start text-left font-normal"
+                    disabled={addItemMutation.isPending}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {newItem.expiryDate
@@ -602,13 +657,14 @@ const Fridge = () => {
                       setNewItem({ ...newItem, expiryDate: date })
                     }
                     initialFocus
+                    locale={vi}
                     className="pointer-events-auto"
                   />
                 </PopoverContent>
               </Popover>
             </div>
           </div>
-          {/* ⭐️ Sử dụng addItemMutation.isPending cho loading state */}
+          {/* Nút Thêm */}
           <Button
             onClick={addItem}
             className="w-full"
@@ -659,7 +715,7 @@ const Fridge = () => {
         </CardContent>
       </Card>
 
-      {/* Fridge Items - PHẦN HIỂN THỊ CẬP NHẬT */}
+      {/* Fridge Items - PHẦN HIỂN THỊ (Giữ nguyên) */}
       <Card>
         <CardHeader>
           <CardTitle>Thực phẩm trong tủ lạnh</CardTitle>
@@ -690,7 +746,7 @@ const Fridge = () => {
 
                 return (
                   <div
-                    key={item._id} // Sử dụng _id từ MongoDB
+                    key={item._id}
                     className="p-4 border rounded-lg bg-white hover:shadow-md transition-all duration-200"
                   >
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -721,7 +777,7 @@ const Fridge = () => {
                             })}
                           </div>
 
-                          {/* ⭐️ CẬP NHẬT: Hiển thị/Chế độ chỉnh sửa Số lượng */}
+                          {/* Hiển thị/Chế độ chỉnh sửa Số lượng */}
                           <div className="col-span-2 lg:col-span-1 flex items-center gap-2">
                             <span className="font-medium">SL:</span>
                             {isEditing ? (
@@ -767,11 +823,10 @@ const Fridge = () => {
                               </span>
                             )}
                           </div>
-                          {/* END ⭐️ CẬP NHẬT: Hiển thị/Chế độ chỉnh sửa Số lượng */}
                         </div>
                       </div>
 
-                      {/* ⭐️ CẬP NHẬT: Nút Chỉnh sửa/Lưu/Hủy */}
+                      {/* Nút Chỉnh sửa/Lưu/Hủy */}
                       <div className="flex gap-2 flex-shrink-0">
                         {isEditing ? (
                           <>
@@ -826,7 +881,6 @@ const Fridge = () => {
                           )}
                         </Button>
                       </div>
-                      {/* END ⭐️ CẬP NHẬT: Nút Chỉnh sửa/Lưu/Hủy */}
                     </div>
                   </div>
                 );

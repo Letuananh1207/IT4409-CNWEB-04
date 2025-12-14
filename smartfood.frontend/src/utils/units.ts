@@ -1,0 +1,16 @@
+export const units = [
+  "cái",
+  "kg",
+  "g",
+  "lít",
+  "ml",
+  "bó",
+  "túi",
+  "hộp",
+  "chai",
+  "thanh",
+  "gói",
+  "vắt",
+  "quả",
+  "khác",
+]; // Thêm các đơn vị phổ biến
