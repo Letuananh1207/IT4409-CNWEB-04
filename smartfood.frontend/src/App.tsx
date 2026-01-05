@@ -17,7 +17,7 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import NotFound from "./pages/NotFound";
 import UserManagementPage from "./pages/UserManagementPage"; // <-- Import trang quản lý người dùng
-import "./app.css";
+import "./App.css";
 
 const queryClient = new QueryClient();
 
