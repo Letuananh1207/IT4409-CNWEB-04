@@ -14,6 +14,8 @@ import {
   getRecipes,
   getSuggestedRecipes,
   createRecipe,
+  updateRecipe,
+  deleteRecipe,
   NewRecipeData,
   IngredientItem,
   RecipeData,
@@ -27,6 +29,7 @@ import {
   RecipeList,
   AddRecipeDialog,
   RecipeDetailDialog,
+  EditRecipeDialog,
 } from "../components/RecipeComponents";
 
 // ⭐️ KHAI BÁO QUERY KEY CỦA TỦ LẠNH (Giả định, phải khớp với Fridge component)
@@ -50,7 +53,6 @@ const Recipes = () => {
     ingredients: [],
     instructions: "",
     category: "",
-    favourite: false,
   });
   const [newIngredient, setNewIngredient] = useState<IngredientItem>({
     name: "",
@@ -63,6 +65,15 @@ const Recipes = () => {
     useState<RecipeData | null>(null);
 
   const [userRole, setUserRole] = useState<string | null>(null);
+
+  // --- Edit Recipe States ---
+  const [showEditRecipeDialog, setShowEditRecipeDialog] = useState(false);
+  const [editingRecipe, setEditingRecipe] = useState<RecipeData | null>(null);
+  const [editIngredient, setEditIngredient] = useState<IngredientItem>({
+    name: "",
+    quantity: 0,
+    unit: "",
+  });
 
   // --- ⭐️ CẬP NHẬT MỚI: Lấy trạng thái dữ liệu tủ lạnh ---
   // Chúng ta không cần đọc data, chỉ cần theo dõi thời điểm nó được cập nhật
@@ -137,7 +148,7 @@ const Recipes = () => {
     return isUserAdmin
       ? 0
       : suggestedRecipes.filter((item) => item.missingIngredients.length === 0)
-          .length;
+        .length;
   }, [suggestedRecipes, isUserAdmin]);
 
   // --- Mutation: Create Recipe (Giữ nguyên) ---
@@ -160,13 +171,41 @@ const Recipes = () => {
         ingredients: [],
         instructions: "",
         category: "",
-        favourite: false,
       });
       setShowAddRecipeDialog(false);
     },
     onError: (error: any) => {
       console.error("Lỗi khi tạo công thức:", error);
       alert(`Lỗi khi tạo công thức: ${error.message || "Có lỗi xảy ra"}`);
+    },
+  });
+
+  // --- Mutation: Update Recipe ---
+  const updateRecipeMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<NewRecipeData> }) =>
+      updateRecipe(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      queryClient.invalidateQueries({ queryKey: ["suggestedRecipes"] });
+      setShowEditRecipeDialog(false);
+      setEditingRecipe(null);
+    },
+    onError: (error: any) => {
+      console.error("Lỗi khi cập nhật công thức:", error);
+      alert(`Lỗi khi cập nhật công thức: ${error.message || "Có lỗi xảy ra"}`);
+    },
+  });
+
+  // --- Mutation: Delete Recipe ---
+  const deleteRecipeMutation = useMutation({
+    mutationFn: (id: string) => deleteRecipe(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      queryClient.invalidateQueries({ queryKey: ["suggestedRecipes"] });
+    },
+    onError: (error: any) => {
+      console.error("Lỗi khi xóa công thức:", error);
+      alert(`Lỗi khi xóa công thức: ${error.message || "Có lỗi xảy ra"}`);
     },
   });
 
@@ -217,6 +256,81 @@ const Recipes = () => {
   const handleViewRecipeDetail = (recipe: RecipeData) => {
     setSelectedRecipeDetail(recipe);
     setShowRecipeDetailDialog(true);
+  };
+
+  // --- Edit Recipe Handlers ---
+  const handleEditRecipe = (recipe: RecipeData) => {
+    setEditingRecipe(recipe);
+    setShowEditRecipeDialog(true);
+  };
+
+  const handleEditRecipeChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    if (!editingRecipe) return;
+    const { name, value } = e.target;
+    setEditingRecipe((prev) => (prev ? { ...prev, [name]: value } : prev));
+  };
+
+  const handleEditSelectChange = (name: string, value: string) => {
+    if (!editingRecipe) return;
+    setEditingRecipe((prev) => (prev ? { ...prev, [name]: value } : prev));
+  };
+
+  const handleEditAddIngredient = () => {
+    if (
+      !editingRecipe ||
+      !editIngredient.name ||
+      editIngredient.quantity <= 0 ||
+      !editIngredient.unit
+    )
+      return;
+    setEditingRecipe((prev) =>
+      prev
+        ? {
+          ...prev,
+          ingredients: [...prev.ingredients, editIngredient],
+        }
+        : prev
+    );
+    setEditIngredient({ name: "", quantity: 0, unit: "" });
+  };
+
+  const handleEditRemoveIngredient = (indexToRemove: number) => {
+    if (!editingRecipe) return;
+    setEditingRecipe((prev) =>
+      prev
+        ? {
+          ...prev,
+          ingredients: prev.ingredients.filter(
+            (_, index) => index !== indexToRemove
+          ),
+        }
+        : prev
+    );
+  };
+
+  const handleUpdateRecipe = async () => {
+    if (!editingRecipe) return;
+    const recipeToUpdate: Partial<NewRecipeData> = {
+      name: editingRecipe.name,
+      description: editingRecipe.description,
+      image: editingRecipe.image,
+      cookTime: editingRecipe.cookTime,
+      servings: Number(editingRecipe.servings),
+      rating: Number(editingRecipe.rating),
+      difficulty: editingRecipe.difficulty,
+      ingredients: editingRecipe.ingredients,
+      instructions: editingRecipe.instructions,
+      category: editingRecipe.category,
+    };
+    updateRecipeMutation.mutate({ id: editingRecipe._id, data: recipeToUpdate });
+  };
+
+  const handleDeleteRecipe = (id: string) => {
+    if (window.confirm("Bạn có chắc chắn muốn xóa công thức này không?")) {
+      deleteRecipeMutation.mutate(id);
+    }
   };
   // ... (End Handlers)
 
@@ -274,11 +388,9 @@ const Recipes = () => {
       {userRole !== "admin" && (
         <RecipeList
           title="Gợi ý thông minh (Nấu ngay & Thiếu ít nguyên liệu)"
-          description={`Tìm thấy ${
-            smartSuggestedRecipes.length
-          } món có thể nấu ngay hoặc chỉ cần mua thêm tối đa 2 nguyên liệu. ${
-            isLoadingSuggestions ? "(Đang cập nhật nguyên liệu...)" : ""
-          }`}
+          description={`Tìm thấy ${smartSuggestedRecipes.length
+            } món có thể nấu ngay hoặc chỉ cần mua thêm tối đa 2 nguyên liệu. ${isLoadingSuggestions ? "(Đang cập nhật nguyên liệu...)" : ""
+            }`}
           recipesToDisplay={
             recipes.filter((recipe) =>
               smartSuggestedRecipes.some(
@@ -289,6 +401,9 @@ const Recipes = () => {
           suggestedRecipes={suggestedRecipes}
           handleViewRecipeDetail={handleViewRecipeDetail}
           isLoading={isLoadingSuggestions && suggestedRecipes.length === 0}
+          isUserAdmin={isUserAdmin}
+          onEdit={handleEditRecipe}
+          onDelete={handleDeleteRecipe}
         />
       )}
 
@@ -314,11 +429,10 @@ const Recipes = () => {
                     selectedDifficulty === difficulty ? "default" : "outline"
                   }
                   size="sm"
-                  className={`px-3 py-1.5 rounded-md ${
-                    selectedDifficulty === difficulty
-                      ? "bg-yellow-600 hover:bg-yellow-700 text-white"
-                      : "border-yellow-300 text-yellow-700 hover:bg-yellow-100"
-                  }`}
+                  className={`px-3 py-1.5 rounded-md ${selectedDifficulty === difficulty
+                    ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                    : "border-yellow-300 text-yellow-700 hover:bg-yellow-100"
+                    }`}
                   onClick={() => setSelectedDifficulty(difficulty)}
                 >
                   {difficulty === "all" ? "Tất cả" : difficulty}
@@ -337,6 +451,9 @@ const Recipes = () => {
         suggestedRecipes={suggestedRecipes}
         handleViewRecipeDetail={handleViewRecipeDetail}
         isLoading={isComponentLoading && recipes.length === 0}
+        isUserAdmin={isUserAdmin}
+        onEdit={handleEditRecipe}
+        onDelete={handleDeleteRecipe}
       />
 
       {/* Dialog Thêm công thức mới */}
@@ -360,6 +477,23 @@ const Recipes = () => {
           showRecipeDetailDialog={showRecipeDetailDialog}
           setShowRecipeDetailDialog={setShowRecipeDetailDialog}
           selectedRecipeDetail={selectedRecipeDetail}
+        />
+      )}
+
+      {/* Dialog sửa công thức */}
+      {editingRecipe && (
+        <EditRecipeDialog
+          showEditRecipeDialog={showEditRecipeDialog}
+          setShowEditRecipeDialog={setShowEditRecipeDialog}
+          editRecipeData={editingRecipe}
+          handleEditRecipeChange={handleEditRecipeChange}
+          handleSelectChange={handleEditSelectChange}
+          editIngredient={editIngredient}
+          setEditIngredient={setEditIngredient}
+          handleAddIngredient={handleEditAddIngredient}
+          handleRemoveIngredient={handleEditRemoveIngredient}
+          handleUpdateRecipe={handleUpdateRecipe}
+          isUpdating={updateRecipeMutation.isPending}
         />
       )}
     </div>

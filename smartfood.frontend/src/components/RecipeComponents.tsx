@@ -141,6 +141,9 @@ export const RecipeList = ({
   suggestedRecipes,
   handleViewRecipeDetail,
   isLoading,
+  isUserAdmin = false,
+  onEdit,
+  onDelete,
 }) => {
   const [showAll, setShowAll] = useState(false);
   const initialDisplayLimit = 3;
@@ -254,9 +257,8 @@ export const RecipeList = ({
                             {recipe.rating}
                           </Badge>
                           <Badge
-                            className={`text-xs px-2 py-0.5 ${
-                              difficultyClasses[recipe.difficulty]
-                            }`}
+                            className={`text-xs px-2 py-0.5 ${difficultyClasses[recipe.difficulty]
+                              }`}
                           >
                             {recipe.difficulty}
                           </Badge>
@@ -265,33 +267,33 @@ export const RecipeList = ({
                         {/* HIỂN THỊ THÔNG TIN NGUYÊN LIỆU CÓ SẴN/THIẾU CHỈ KHI CÓ suggestion */}
                         {(availableIngredients.length > 0 ||
                           missingIngredients.length > 0) && (
-                          <div className="space-y-1 text-xs p-2 bg-gray-50 rounded-md border border-gray-100">
-                            {availableIngredients.length > 0 && (
-                              <div>
-                                <p className="font-medium text-green-700 flex items-center gap-1">
-                                  <Refrigerator className="h-3 w-3" /> Có sẵn (
-                                  {availableIngredients.length}):
-                                </p>
-                                <p className="text-green-600 mt-0.5">
-                                  {availableIngredients.slice(0, 2).join(", ")}
-                                  {availableIngredients.length > 2 && "..."}
-                                </p>
-                              </div>
-                            )}
-                            {missingIngredients.length > 0 && (
-                              <div>
-                                <p className="font-medium text-red-700 flex items-center gap-1">
-                                  <Plus className="h-3 w-3" /> Cần mua (
-                                  {missingIngredients.length}):
-                                </p>
-                                <p className="text-red-600 mt-0.5">
-                                  {missingIngredients.slice(0, 2).join(", ")}
-                                  {missingIngredients.length > 2 && "..."}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                            <div className="space-y-1 text-xs p-2 bg-gray-50 rounded-md border border-gray-100">
+                              {availableIngredients.length > 0 && (
+                                <div>
+                                  <p className="font-medium text-green-700 flex items-center gap-1">
+                                    <Refrigerator className="h-3 w-3" /> Có sẵn (
+                                    {availableIngredients.length}):
+                                  </p>
+                                  <p className="text-green-600 mt-0.5">
+                                    {availableIngredients.slice(0, 2).join(", ")}
+                                    {availableIngredients.length > 2 && "..."}
+                                  </p>
+                                </div>
+                              )}
+                              {missingIngredients.length > 0 && (
+                                <div>
+                                  <p className="font-medium text-red-700 flex items-center gap-1">
+                                    <Plus className="h-3 w-3" /> Cần mua (
+                                    {missingIngredients.length}):
+                                  </p>
+                                  <p className="text-red-600 mt-0.5">
+                                    {missingIngredients.slice(0, 2).join(", ")}
+                                    {missingIngredients.length > 2 && "..."}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                         <Button
                           size="sm"
@@ -300,6 +302,28 @@ export const RecipeList = ({
                         >
                           Xem chi tiết
                         </Button>
+
+                        {/* ADMIN: Thêm nút Sửa và Xóa */}
+                        {isUserAdmin && onEdit && onDelete && (
+                          <div className="flex gap-2 mt-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                              onClick={() => onEdit(recipe)}
+                            >
+                              Sửa
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 text-xs border-red-300 text-red-700 hover:bg-red-50"
+                              onClick={() => onDelete(recipe._id)}
+                            >
+                              Xóa
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -315,9 +339,8 @@ export const RecipeList = ({
                 >
                   {showAll
                     ? "Thu gọn"
-                    : `Xem thêm ${
-                        recipesToDisplay.length - initialDisplayLimit
-                      } công thức`}
+                    : `Xem thêm ${recipesToDisplay.length - initialDisplayLimit
+                    } công thức`}
                 </Button>
               </div>
             )}
@@ -759,13 +782,12 @@ export const RecipeDetailDialog = ({
             {selectedRecipeDetail.rating} / 5
           </Badge>
           <Badge
-            className={`text-xs px-2.5 py-1 rounded-md ${
-              selectedRecipeDetail.difficulty === "Dễ"
-                ? "bg-green-100 text-green-700 border-green-200"
-                : selectedRecipeDetail.difficulty === "Trung bình"
+            className={`text-xs px-2.5 py-1 rounded-md ${selectedRecipeDetail.difficulty === "Dễ"
+              ? "bg-green-100 text-green-700 border-green-200"
+              : selectedRecipeDetail.difficulty === "Trung bình"
                 ? "bg-yellow-100 text-yellow-700 border-yellow-200"
                 : "bg-red-100 text-red-700 border-red-200"
-            }`}
+              }`}
           >
             <span className="font-medium">Độ khó:</span>{" "}
             {selectedRecipeDetail.difficulty}
@@ -818,3 +840,372 @@ export const RecipeDetailDialog = ({
     </DialogContent>
   </Dialog>
 );
+
+// =================================================================
+// 5. EditRecipeDialog
+// =================================================================
+export const EditRecipeDialog = ({
+  showEditRecipeDialog,
+  setShowEditRecipeDialog,
+  editRecipeData,
+  handleEditRecipeChange,
+  handleSelectChange,
+  editIngredient,
+  setEditIngredient,
+  handleAddIngredient,
+  handleRemoveIngredient,
+  handleUpdateRecipe,
+  isUpdating,
+}: {
+  showEditRecipeDialog: boolean;
+  setShowEditRecipeDialog: (open: boolean) => void;
+  editRecipeData: RecipeData;
+  handleEditRecipeChange: (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => void;
+  handleSelectChange: (name: string, value: string) => void;
+  editIngredient: IngredientItem;
+  setEditIngredient: React.Dispatch<React.SetStateAction<IngredientItem>>;
+  handleAddIngredient: () => void;
+  handleRemoveIngredient: (index: number) => void;
+  handleUpdateRecipe: () => Promise<void>;
+  isUpdating: boolean;
+}) => {
+  const [isIngComboboxOpen, setIsIngComboboxOpen] = useState(false);
+  const [ingSearchTerm, setIngSearchTerm] = useState("");
+
+  const filteredIngSuggestions = useMemo(() => {
+    if (!ingSearchTerm) return FOOD_SUGGESTIONS;
+    return FOOD_SUGGESTIONS.filter((food) =>
+      food.name.toLowerCase().includes(ingSearchTerm.toLowerCase())
+    );
+  }, [ingSearchTerm]);
+
+  const handleSelectIngFood = (food: FoodInfo) => {
+    setEditIngredient((prev) => ({
+      ...prev,
+      name: food.name,
+      unit: food.unit,
+    }));
+    setIsIngComboboxOpen(false);
+    setIngSearchTerm("");
+  };
+
+  return (
+    <Dialog open={showEditRecipeDialog} onOpenChange={setShowEditRecipeDialog}>
+      <DialogContent className="sm:max-w-[600px] md:max-w-[700px] max-h-[85vh] overflow-y-auto p-5 bg-white shadow-xl rounded-lg">
+        <DialogHeader className="border-b pb-3 mb-3">
+          <DialogTitle className="text-2xl font-bold text-gray-900">
+            Sửa công thức
+          </DialogTitle>
+          <DialogDescription className="text-gray-600 text-sm">
+            Cập nhật thông tin chi tiết cho công thức nấu ăn.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-3 md:grid-cols-2 text-sm">
+          {/* KHỐI TRÁI */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-1.5">
+              <Label
+                htmlFor="name"
+                className="md:col-span-1 text-left md:text-right font-medium text-gray-700 text-xs"
+              >
+                Tên công thức
+              </Label>
+              <Input
+                id="name"
+                name="name"
+                value={editRecipeData.name}
+                onChange={handleEditRecipeChange}
+                className="md:col-span-3 border-gray-300 focus:ring-blue-400 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-1.5">
+              <Label
+                htmlFor="description"
+                className="md:col-span-1 text-left md:text-right font-medium text-gray-700 text-xs"
+              >
+                Mô tả
+              </Label>
+              <Textarea
+                id="description"
+                name="description"
+                value={editRecipeData.description}
+                onChange={handleEditRecipeChange}
+                className="md:col-span-3 border-gray-300 focus:ring-blue-400 min-h-[60px] text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-1.5">
+              <Label
+                htmlFor="instructions"
+                className="md:col-span-1 text-left md:text-right font-medium text-gray-700 text-xs"
+              >
+                Hướng dẫn
+              </Label>
+              <Textarea
+                id="instructions"
+                name="instructions"
+                value={editRecipeData.instructions}
+                onChange={handleEditRecipeChange}
+                className="md:col-span-3 border-gray-300 focus:ring-blue-400 min-h-[100px] text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-1.5">
+              <Label
+                htmlFor="image"
+                className="md:col-span-1 text-left md:text-right font-medium text-gray-700 text-xs"
+              >
+                Hình ảnh (emoji)
+              </Label>
+              <Input
+                id="image"
+                name="image"
+                value={editRecipeData.image}
+                onChange={handleEditRecipeChange}
+                className="md:col-span-3 border-gray-300 focus:ring-blue-400 text-sm"
+                placeholder="Ex: 🍔, 🍕, 🍜"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-1.5">
+              <Label
+                htmlFor="category"
+                className="md:col-span-1 text-left md:text-right font-medium text-gray-700 text-xs"
+              >
+                Danh mục
+              </Label>
+              <Input
+                id="category"
+                name="category"
+                value={editRecipeData.category}
+                onChange={handleEditRecipeChange}
+                className="md:col-span-3 border-gray-300 focus:ring-blue-400 text-sm"
+                placeholder="Ex: Món chính, Tráng miệng"
+              />
+            </div>
+          </div>
+
+          {/* KHỐI PHẢI */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-1.5">
+              <Label
+                htmlFor="cookTime"
+                className="md:col-span-1 text-left md:text-right font-medium text-gray-700 text-xs"
+              >
+                Thời gian nấu
+              </Label>
+              <Input
+                id="cookTime"
+                name="cookTime"
+                value={editRecipeData.cookTime}
+                onChange={handleEditRecipeChange}
+                className="md:col-span-3 border-gray-300 focus:ring-blue-400 text-sm"
+                placeholder="Ex: 30 phút, 1 giờ"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-1.5">
+              <Label
+                htmlFor="servings"
+                className="md:col-span-1 text-left md:text-right font-medium text-gray-700 text-xs"
+              >
+                Số người ăn
+              </Label>
+              <Input
+                id="servings"
+                name="servings"
+                type="number"
+                value={editRecipeData.servings}
+                onChange={handleEditRecipeChange}
+                className="md:col-span-3 border-gray-300 focus:ring-blue-400 text-sm"
+                min="1"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-1.5">
+              <Label
+                htmlFor="rating"
+                className="md:col-span-1 text-left md:text-right font-medium text-gray-700 text-xs"
+              >
+                Đánh giá (0-5)
+              </Label>
+              <Input
+                id="rating"
+                name="rating"
+                type="number"
+                value={editRecipeData.rating}
+                onChange={handleEditRecipeChange}
+                className="md:col-span-3 border-gray-300 focus:ring-blue-400 text-sm"
+                min="0"
+                max="5"
+                step="0.1"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-1.5">
+              <Label
+                htmlFor="difficulty"
+                className="md:col-span-1 text-left md:text-right font-medium text-gray-700 text-xs"
+              >
+                Độ khó
+              </Label>
+              <Select
+                name="difficulty"
+                value={editRecipeData.difficulty}
+                onValueChange={(value) =>
+                  handleSelectChange("difficulty", value)
+                }
+              >
+                <SelectTrigger className="md:col-span-3 border-gray-300 focus:ring-blue-400 text-sm">
+                  <SelectValue placeholder="Chọn độ khó" />
+                </SelectTrigger>
+                <SelectContent className="text-sm">
+                  <SelectItem value="Dễ">Dễ</SelectItem>
+                  <SelectItem value="Trung bình">Trung bình</SelectItem>
+                  <SelectItem value="Khó">Khó</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-left font-semibold text-gray-700 block text-xs">
+                Nguyên liệu (Tìm kiếm để điền Tên & Đơn vị)
+              </Label>
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                <Popover
+                  open={isIngComboboxOpen}
+                  onOpenChange={setIsIngComboboxOpen}
+                >
+                  <PopoverTrigger asChild className="sm:col-span-2">
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={isIngComboboxOpen}
+                      className="w-full justify-between h-9 text-sm"
+                    >
+                      {editIngredient.name
+                        ? editIngredient.name
+                        : "Tên nguyên liệu"}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0 z-50">
+                    <Command>
+                      <CommandInput
+                        placeholder="Tìm kiếm nguyên liệu..."
+                        value={ingSearchTerm}
+                        onValueChange={setIngSearchTerm}
+                      />
+                      <CommandEmpty>Không tìm thấy.</CommandEmpty>
+                      <CommandList>
+                        <CommandGroup>
+                          {filteredIngSuggestions.map((food) => (
+                            <CommandItem
+                              key={food.name}
+                              value={food.name}
+                              onSelect={() => handleSelectIngFood(food)}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  editIngredient.name === food.name
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                              {food.name}
+                              <span className="ml-auto text-xs text-gray-500">
+                                ({food.unit})
+                              </span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                <Input
+                  type="number"
+                  placeholder="Số lượng"
+                  value={
+                    editIngredient.quantity === 0 ? "" : editIngredient.quantity
+                  }
+                  onChange={(e) =>
+                    setEditIngredient((prev) => ({
+                      ...prev,
+                      quantity: Number(e.target.value),
+                    }))
+                  }
+                  className="sm:col-span-1 border-gray-300 focus:ring-blue-400 text-sm h-9"
+                  min="0"
+                />
+
+                <Input
+                  placeholder="Đơn vị"
+                  value={editIngredient.unit}
+                  onChange={(e) =>
+                    setEditIngredient((prev) => ({
+                      ...prev,
+                      unit: e.target.value,
+                    }))
+                  }
+                  className="sm:col-span-1 border-gray-300 focus:ring-blue-400 text-sm h-9"
+                />
+
+                <Button
+                  onClick={handleAddIngredient}
+                  size="sm"
+                  className="sm:col-span-1 bg-blue-500 hover:bg-blue-600 text-white text-xs py-1.5 h-9"
+                >
+                  Thêm
+                </Button>
+              </div>
+
+              <div className="space-y-1 mt-1 flex flex-wrap gap-1 p-1.5 bg-gray-50 rounded-md border border-gray-100">
+                {editRecipeData.ingredients.length === 0 && (
+                  <p className="text-gray-500 text-xs">
+                    Chưa có nguyên liệu nào.
+                  </p>
+                )}
+                {editRecipeData.ingredients.map((ing, index) => (
+                  <Badge
+                    key={index}
+                    variant="secondary"
+                    className="flex items-center bg-blue-100 text-blue-800 border-blue-200 text-xs"
+                  >
+                    {ing.name} ({ing.quantity} {ing.unit})
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4 ml-1 p-0 text-blue-600 hover:bg-blue-200"
+                      onClick={() => handleRemoveIngredient(index)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="pt-3 border-t mt-3">
+          <Button
+            variant="outline"
+            onClick={() => setShowEditRecipeDialog(false)}
+            className="px-4 py-1.5 rounded-md text-gray-700 border-gray-300 hover:bg-gray-100 text-sm"
+          >
+            Hủy
+          </Button>
+          <Button
+            onClick={handleUpdateRecipe}
+            className="px-4 py-1.5 rounded-md bg-orange-600 hover:bg-orange-700 text-white text-sm"
+            disabled={isUpdating}
+          >
+            {isUpdating ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              "Cập nhật công thức"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};

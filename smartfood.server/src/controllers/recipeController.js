@@ -25,7 +25,7 @@ const getRecipes = asyncHandler(async (req, res) => {
     const recipes = await Recipe.find(query)
         .populate('user', 'username')
         .sort({ createdAt: -1 });
-    
+
     res.status(200).json(recipes);
 });
 
@@ -48,15 +48,15 @@ const getRecipeById = asyncHandler(async (req, res) => {
 // @route   POST /api/recipes
 // @access  Private
 const createRecipe = asyncHandler(async (req, res) => {
-    const { 
-        name, 
-        description, 
-        ingredients, 
-        instructions, 
-        category, 
-        cookTime, 
-        servings, 
-        difficulty, 
+    const {
+        name,
+        description,
+        ingredients,
+        instructions,
+        category,
+        cookTime,
+        servings,
+        difficulty,
         image
     } = req.body;
 
@@ -96,8 +96,11 @@ const updateRecipe = asyncHandler(async (req, res) => {
         throw new Error('Không tìm thấy công thức');
     }
 
-    // Chỉ cho phép chủ sở hữu sửa
-    if (recipe.user.toString() !== req.user._id.toString()) {
+    // Cho phép admin sửa bất kỳ công thức nào, user thường chỉ sửa công thức của mình
+    const isAdmin = req.user.role === 'admin';
+    const isOwner = recipe.user.toString() === req.user._id.toString();
+
+    if (!isAdmin && !isOwner) {
         res.status(403);
         throw new Error('Bạn không có quyền sửa công thức này');
     }
@@ -122,8 +125,11 @@ const deleteRecipe = asyncHandler(async (req, res) => {
         throw new Error('Không tìm thấy công thức');
     }
 
-    // Chỉ cho phép chủ sở hữu xóa
-    if (recipe.user.toString() !== req.user._id.toString()) {
+    // Cho phép admin xóa bất kỳ công thức nào, user thường chỉ xóa công thức của mình
+    const isAdmin = req.user.role === 'admin';
+    const isOwner = recipe.user.toString() === req.user._id.toString();
+
+    if (!isAdmin && !isOwner) {
         res.status(403);
         throw new Error('Bạn không có quyền xóa công thức này');
     }

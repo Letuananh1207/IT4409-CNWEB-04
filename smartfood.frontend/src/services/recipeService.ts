@@ -111,4 +111,24 @@ const createRecipe = async (recipeData: NewRecipeData): Promise<RecipeData> => {
     return response.data;
 };
 
-export { getRecipes, getRecipeById, getSuggestedRecipes, toggleFavoriteRecipe, createRecipe };
+/**
+ * @desc Cập nhật một công thức nấu ăn
+ * @param id ID của công thức cần cập nhật
+ * @param recipeData Dữ liệu công thức cần cập nhật
+ * @returns Promise<RecipeData>
+ */
+const updateRecipe = async (id: string, recipeData: Partial<NewRecipeData>): Promise<RecipeData> => {
+    const response = await axios.put(`${API_URL}/${id}`, recipeData, getConfig());
+    return response.data;
+};
+
+/**
+ * @desc Xóa một công thức nấu ăn
+ * @param id ID của công thức cần xóa
+ * @returns Promise<void>
+ */
+const deleteRecipe = async (id: string): Promise<void> => {
+    await axios.delete(`${API_URL}/${id}`, getConfig());
+};
+
+export { getRecipes, getRecipeById, getSuggestedRecipes, toggleFavoriteRecipe, createRecipe, updateRecipe, deleteRecipe };
